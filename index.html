@@ -40,8 +40,18 @@ var ADMIN_EMAILS=["sleepywriter.id@gmail.com"];
   });
   var admins=ADMIN_EMAILS.map(function(e){return String(e).toLowerCase()});
   function isAdm(){var u=window.__fbState.user;return !!u&&admins.indexOf((u.email||"").toLowerCase())>-1}
+  /* Objek dari iframe berasal dari "realm" lain, sehingga Firestore menolaknya (invalid-argument).
+     Data disalin dulu lewat JSON agar menjadi objek biasa milik halaman induk. */
+  function plain(d){return d===undefined?d:JSON.parse(JSON.stringify(d))}
+  function wrapRef(r){return new Proxy(r,{get:function(t,k){
+    if(k==="set")return function(d,o){return o===undefined?t.set(plain(d)):t.set(plain(d),o)};
+    if(k==="update")return function(d){return t.update(plain(d))};
+    var v=t[k];return typeof v==="function"?v.bind(t):v}})}
+  var dbw=new Proxy(fs,{get:function(t,k){
+    if(k==="doc")return function(p){return wrapRef(t.doc(p))};
+    var v=t[k];return typeof v==="function"?v.bind(t):v}});
   window.claude={use:async function(n){
-    if(n==="db"){await ready;return fs}
+    if(n==="db"){await ready;return dbw}
     if(n==="user"){await ready;return {isOwner:async function(){return isAdm()},canEdit:async function(){return isAdm()}}}
     return null; /* "downloads" dll: aplikasi memakai unduhan biasa */
   }};
